@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<head>
+<meta charset=utf-8>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {box-sizing:border-box}
+body {font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#000; color:#88D}
+table {max-width:40rem;	width:100%}
+.slider {position:relative; width:100%; height:1.5rem; border:1px solid #555}
+.track {position:absolute; height:100%; background:#55E; top:0; left:0}
+.thumb {position:absolute; width:1rem; height:200%; top:-50%; right:-0.5rem; border:1px solid #555; background:#EEE}
+.led {border:0.5rem solid #000; width:2rem; height:2rem; background:#4A1500; -webkit-border-radius:1rem; -moz-border-radius:1rem; border-radius:1rem}
+th, td {line-height:3rem}
+th {width:5%}
+th div {white-space:nowrap; text-align:left; min-width:3rem}
+td {width:80%; text-align:center}
+td:last-child {width:3rem}
+.info {color:#00E040; font-size:120%; min-width: 4rem}
+.switch label, .switch input {display:block; float:left; width:33.3%}
+.switch input {display:none; z-index:99}
+.switch input:checked+label, .Checked+label {background:#55E; color:white}
+.switch label {border:1px solid #555; cursor:pointer; z-index:90}
+.switch label:hover {background:#338}
+#ld {position:absolute; left:50%; top:50%; border-radius:50%; border: 1rem solid #55EA; margin: -3rem 0 0 -3rem; -webkit-mask: linear-gradient(#FFF1, #000E, #FFF1); width: 6rem; height: 6rem; animation: spin 1s linear infinite}
+@keyframes spin {0% {transform: rotate(0deg)} 100% {transform: rotate(360deg)}}
+@media only screen and (max-width:30rem) {body {margin:0}}
+</style>
+<title>Control</title>
+<script language="javascript">
+
+function rs485(cmd, handler) {
+	http("/send?cmd=" + uri(hexCrc(cmd, true)), "", handler);
+}
+
+var State = function(c) {
+
+var cfg = (c ? c : {gpio:[]});
+
+function genLabel(d) {
+	return hT(hT(duri(d.l), 'div'), 'th');
+}
+
+function renderSlider(d, h, s, ro) {
+	var p = "P" + d.p;
+	var ps = p + "-slider";
+	var pi = p + "-info";
+	h.push(hTr(genLabel(d) + hTd(hT(null, "div", hArg("id", ps)))
+		+ hT(null, "td", hArg("id", pi) + hArg("class", "info"))));
+	s.push(function() {
+		var info = ge(pi);
+		var iv = d.v / 1023.0;
+		var rt = d.r;
+		var w = false;
+		var v0 = iv, v = iv;
+		// var f = empty(d.f) ? null : duri(d.f);
+		var f = 'v < 51 ? "Open" : (v > 972 ? "Closed" : ((v*100/1024).toFixed(0) + "%"))';
+		bar = new Slider({div : ge(ps),
+			value : iv,
+			readOnly : ro,
+			onChange : function(vc, stop) {
+				v = (vc * 1023.0).toFixed(0);
+				try {
+					sh(info, f ? eval(f) : v);
+				} catch(e) {
+					sh(info, e);
+				}
+				if((stop || rt) && !w && (v0 != v)) {
+					function hs(re, s) {
+						// if(s == 200) d.v = Number(gv(r));
+						// if(d) updateCurtain(d);
+						if(rt && (v0 != v)) {
+							send();
+						} else {
+							w = false;
+						}
+					};
+					function send() {
+						w = true;
+						v0 = v;				
+						var c = "55" + d.p;
+						if(v0 < 51) {c += "0302";}
+						else if(v0 > 972) {c += "0301";}
+						else {c += "0304" + b2hs((v0 * 100 / 1024).toFixed(0));}
+						rs485(c, hs);
+					};
+					send();
+				}
+			}
+		});
+	});
+}
+
+this.render = function() {
+	ge("ld").style.display = "none";
+	var r = ge("cmds"), h = [], s = [];
+	h.push('<table>');
+	for(var i = 0; i < cfg.gpio.length; ++i) {
+		var d = cfg.gpio[i];
+		if(!d || !d.c) continue;
+		switch(d.c) {
+		case "curtain": renderSlider(d,h,s,false);
+			break;
+		}
+	}
+	h.push('</table>');
+	sh(r, h.join('\n'));
+	for(var i = 0; i < s.length; ++i) {
+		s[i]();
+	}
+};
+
+};
+
+var Slider = function(cfg) {
+
+var s, bwi, bpk, bpo, r, t, tw, tX, p = 0, x, oc, rect, that = this;
+
+function ini() {
+	tw = t.clientWidth / 2;
+	bwi = s.clientWidth - (tw * 2);
+	bpk = bwi / s.clientWidth;
+	bpo = tw / s.clientWidth;
+	update();
+}
+
+function init() {
+	var id = cfg.div.id;
+	s = ce('slider');
+	s.id = id + "-s";
+	r = ce('track');
+	r.id = id + "-r";
+	s.appendChild(r);
+	t = ce('thumb');
+	t.id = id + "-t";
+	if(cfg.readOnly) t.style.backgroundColor = "#000";
+	r.appendChild(t);
+	cfg.div.appendChild(s);
+	window.addEventListener("resize", ini);
+	ini();
+	setRO();
+	if(!isNaN(gv(cfg))) {
+		that.set(gv(cfg));
+	}
+}
+
+function update() {
+	p = (p > 1 ? 1 : (p < 0 ? 0 : p));
+	p1 = ((p * bpk) + bpo).toFixed(4);
+	r.style.width = (p1 * 100) + '%';
+	onChange(false);
+}
+
+function setRO() {
+	s.removeEventListener('mousedown', start, false);
+	if(cfg.readOnly) {
+		s.style.cursor = 'auto';
+	} else {
+		s.addEventListener('mousedown', start, false);
+		s.style.cursor = 'pointer';
+	}
+}
+
+function start(e) {
+	rect = s.getBoundingClientRect();
+	tX = (e.target == t) ? ((e.offsetX == undefined ? e.layerX : e.offsetX) + 1) : tw;
+	move(e);
+	dc.addEventListener('mousemove', move, false);
+	dc.addEventListener('mouseup', stop, false);
+}
+
+function move(e) {
+	x = e.clientX;
+	p = (((x - rect.left - tX))/ bwi).toFixed(4);
+	update();
+}
+
+function stop(e) {
+	dc.removeEventListener('mousemove', move, false);
+	dc.removeEventListener('mouseup', stop, false);
+	onChange(true);
+}
+
+
+function onChange(stop) {
+	if(cfg.onChange) cfg.onChange(p, stop);
+}
+
+this.set = function(v) {
+	p = v.toFixed(4);
+	update();
+};
+
+this.get = function() {
+	return p;
+};
+
+this.readOnly = function(v) {
+	cfg.readOnly = v;
+	setRO();
+};
+
+init();
+};
+
+function touchMouse() {
+	var mev = {touchstart:"mousedown", touchmove:"mousemove", touchend:"mouseup", touchcancel:0}; 
+
+	function th(e) {
+		var f = e.changedTouches[0], me = mev[e.type];
+		if(!me) return;
+		var ev = dc.createEvent("MouseEvent");
+		ev.initMouseEvent(me, true, true, window, 1, f.screenX, f.screenY,
+			f.clientX, f.clientY, false, false, false, false, 0, null);
+		f.target.dispatchEvent(ev);
+	}
+
+	for(i in mev) dc.addEventListener(i, th, true);
+}
+
+function updateState(cfg) {
+	var r = function() {
+		state = new State(cfg);
+		state.render();
+	};
+	if(!cfg) return r();
+	var i = -1, e = 0, d;
+	var g = function() {
+		do {
+			if(++i >= cfg.gpio.length) {
+				if(e > 0) e = i = 0;
+				else return r();
+			}
+			d = cfg.gpio[i];
+		} while(d.v != null && d.v >= 0);
+		d.p = hexCrc(d.idl + " " + d.idh, false);
+		if(!d.v) d.v = -1;
+		if(d.p.substring(2, 4) == "00") return g();
+		rs485("55" + d.p + "010201", function(re, s) {
+			if(s == 200) {
+				re = re.split('\n')[1];
+				if(!re || re.length < 16) {
+					if(--d.v > -4) ++e;
+					else d.v = 0;
+				} else {
+					d.v = 0;
+					if(re.substring(6, 10) == "0101") {
+						var b = hs2i(re.substring(10, 12));
+						if(!isNaN(b) && b > 0 && b <= 100) d.v = (b * 1024 / 100).toFixed();
+					}
+				}
+			}
+			g();
+		});
+	};
+	g();
+}
+
+function onBodyLoad() {
+	touchMouse();
+	http("/pState", "", function(re, s) {
+		sh(ge("stat"), (s == 200) ? "" : re);
+		updateState((s == 200) ? eval('(' + re + ')') : null);
+	});
+}
+
+</script>
+</head>
+<body>
+<h4><div id="stat"/></h4>
+<section><div id="ld"></div><div id="cmds"></div></section>
+<script language="javascript">
+window.onload = function() {
+	var j = document.createElement("script");
+	j.src = "ju.js";
+	j.onload = onBodyLoad;
+	document.body.appendChild(j);
+};
+</script>
+</body>

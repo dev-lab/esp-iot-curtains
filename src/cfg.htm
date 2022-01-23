@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<head>
+<meta charset=utf-8>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {box-sizing:border-box}
+body {font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#000;	color:#88D}
+form {background:#123; display:block}
+table {width:100%}
+table td:nth-of-type(1) {width:10%}
+input[type="text"], input[type="password"] {max-width:15rem; width:100%}
+select {max-width:30rem; width:100%}
+input:read-only, input:-moz-read-only {background:#123;	border-color:#567; color:#88D}
+@media only screen and (max-width:30rem) {body {margin: 0}}
+</style>
+
+<title>Configure</title>
+<script language="javascript">
+
+function wfs(l, e) {
+	var i = l.selectedIndex;
+	if(i > 0) sv(ge(e), aps[i].n);
+}
+function wfe(e, l) {
+	var v = gv(e);
+	l = ge(l);
+	if(v == aps[l.selectedIndex].n) return;
+	for(var i = 0; i < aps.length; i++) {
+		if(aps[i].n == v) {
+			l.selectedIndex = i;
+			return;
+		}
+	}
+	l.selectedIndex = 0;
+}
+function updateStatus(sta, ap) {
+	sh(ge("staStat"), sta);
+	sh(ge("apStat"), ap);
+}
+function validateAp(f, p2) {
+	if(gv(f["pwd"]) == gv(ge(p2))) return true;
+	alert("Passwords entered don't match!");
+	return false;
+}
+
+function valueMod(f, n, v) {
+	if("" == v) return v;
+	var fn = gv(f["m"]);
+	if(fn == "admin" && n == "old") {
+		return btoa(fn + ":" + v);
+	} else if((fn == "admin" || fn == "user") && n == "pwd") {
+		return btoa(fn + ":" + v);
+	}
+	return v;
+}
+
+function genForm(n, label, pre, woo, rst) {
+	var t = "";
+	var pwd = n + "Pwd";
+	var st = n + "Stat";
+	if(pre) t = pre;
+	if(!woo) {
+		t += hFRow("Old password:", hInputP(null, 'old', ''));
+	}
+	t += hFRow("Password:", hInputP(null, 'pwd', ''));
+	t += hFRow("Retype password:", hInputP(pwd, null, ''));
+	t += hFRow(hButtonS("Submit" + (rst?", Restart":""), "m", n),
+		hT(' ', 'div', hArg('id', st)));
+	return hT(hT(label, 'h2') + '\n' + hT(t, 'table'), 'form',
+			hArg('name', n) + hArg('autocomplete', 'off') + hArg('action', 'cfg')
+		+ hArg('onsubmit', "return postForm(this, '/cfg?m=" + n
+			+ "', validateAp, '" + pwd + "', '" + st
+			+ "', " + (rst?"staRefresh":"null")+ ", valueMod);")
+		+ hArg('method', 'POST'));
+}
+
+function staRefresh(re, s) {
+	if(s == 200) {
+		setTimeout(function() {postForm(dc.forms["sta"], "/cfgSta", null, null, null, staHandler);}, 10000);
+	}
+}
+
+function ap(n, d) {
+	var d = d.split(',');
+	d[0] = ["Open","WEP","WPA","WPA2","WPA+WPA2"][d[0]];
+	return {
+		s: d[1],
+		n: n,
+		d: n + " (" + d[0] + ", " + d[1] + "dBm, " + d[2] + ", CH:" + d[3] + ")"
+	};
+}
+
+function staHandler(re, s) {
+	if(s != 200) {
+		updateStatus(re, re);
+		return;
+	}
+	var l = ge("wf"), e = ge("ssid");
+	l.disabled = false;
+	e.disabled = false;
+	var r = eval('(' + re + ')'), h = hO(""), a = 0, n = r.stat;
+	aps = [];
+	if(r.aps) {
+		for(var i in r.aps) {
+			a = 1;
+			aps.push(ap(i, r.aps[i]));
+		}
+		aps.sort(function(a,b){return b.s - a.s;});
+	}
+	aps.unshift("");
+	for(var i = 1; i < aps.length; i++) {
+		h += hO(aps[i].d);
+	}
+
+	sh(l, h);
+	l.selectedIndex = a;
+	sv(e, aps[a].n);
+	updateStatus(n.ls + " ip:" + n.ip + ", netmask:" + n.nm + ", gateway:" + n.gw,
+		n.als + (n.aip ? " ip:" + n.aip + ", netmask:" + n.anm + ", gateway:" + n.agw : ""));
+	l.focus();
+}
+
+function onBodyLoad() {
+	var ap = hFRow("Name:", hInputT(null, 'ssid', null))
+		+ hFRow("Setup only:", hInput('checkbox', null, 'opt', '1', 'checked') + "Disable Access Point on successful connection to Wireless Network.");
+	sh(ge("forms"), genForm('ap', 'Setup Wi-Fi access point:', ap, true, true, staRefresh)
+		+ genForm('admin', 'Change admin password:')
+		+ genForm('user', 'Change user password:', null, true));
+	postForm(dc.forms["sta"], "/cfgSta", null, null, null, staHandler);
+}
+</script>
+</head>
+<body>
+<form name="sta" autocomplete="off" action="cfg" method="POST" onsubmit="return postForm(this, '/cfg?m=sta', null, null, 'staStat', staRefresh);">
+<h2>Connect to wireless network:</h2>
+<table>
+	<tr><td><b>Name:</b></td>
+		<td><input disabled type="text" id="ssid" name="ssid" onkeyup="wfe(this, 'wf')"/>
+		<select disabled id="wf" onChange="wfs(this, 'ssid')" onkeyup="wfs(this, 'ssid')">
+			<option>Loading...</option>
+		</select></td>
+	</tr><tr><td><b>Password:</b></td>
+		<td><input type="text" name="pwd" value=""></td>
+	</tr><tr><td><button type="submit" value="sta" name="m">Connect</button></td>
+		<td><div id="staStat"></div></td>
+	</tr>
+</table>
+</form>
+<div id="forms" />
+<script language="javascript">
+window.onload = function() {
+	var j = document.createElement("script");
+	j.src = "ju.js";
+	j.onload = onBodyLoad;
+	document.body.appendChild(j);
+};
+</script>
+</body>

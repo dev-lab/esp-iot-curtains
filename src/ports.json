@@ -1,0 +1,9 @@
+{"gpio":[
+{"l":"All","idl":"0","idh":"0","t":"CU","c":"curtain"},
+{"l":"Bar","idl":"42","idh":"43","t":"CU","c":"curtain"},
+{"l":"Living","idl":"43","idh":"43","t":"CU","c":"curtain"},
+{"l":"Zzz","idl":"44","idh":"43","t":"CU","c":"curtain"},
+{"l":"Lab","idl":"45","idh":"43","t":"CU","c":"curtain"},
+{"l":"Y!zzz","idl":"46","idh":"43","t":"CU","c":"curtain"},
+{"l":"Kitchen","idl":"47","idh":"43","t":"CU","c":"curtain"}
+]}

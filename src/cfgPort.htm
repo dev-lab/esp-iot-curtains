@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<head>
+<meta charset=utf-8>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {box-sizing:border-box}
+body {font-family:Arial,"Helvetica Neue",Helvetica,sans-serif; background:#000;	color:#88D}
+form {background:#234; display:block}
+table.btn {table-layout:fixed}
+input[type="text"] {max-width:15rem; width:100%}
+.rotate {text-align:center; white-space:nowrap;	vertical-align:middle; width:1.5rem}
+.rotate div {-moz-transform:rotate(-90.0deg); -o-transform:rotate(-90.0deg); -webkit-transform:rotate(-90.0deg); transform:rotate(-90.0deg); margin-left:-9rem;	margin-right:-9rem}
+@media only screen and (max-width:30rem) {body {margin: 0}}
+</style>
+
+<title>Configure Devices</title>
+<script language="javascript">
+
+function row(btn) {
+
+var r = btn, n = gv(r);
+while(r.nodeName != "TABLE") r = r.parentNode;
+while(r.nodeName != "TR") r = r.parentNode;
+var c = r.cloneNode(true);
+var tb = r;
+while(tb.nodeName != "TBODY") tb = tb.parentNode;
+
+function change(o) {
+	tb.insertBefore(c, o);
+	tb.removeChild(r);
+	var bs = gt(c, "input");
+	for(var i = 0; i < bs.length; ++i) {
+		if(gv(bs[i]) == n) {
+			bs[i].focus();
+			break;
+		}
+	}
+}
+
+return {
+	remove : function() {
+		tb.removeChild(r);
+	},
+
+	down : function() {
+		var i = 0, e = r;
+		while(i < 2 && e != null) {
+			e = e.nextSibling;
+			if(e != null && e.nodeName == "TR") ++i;
+		}
+		change(e);
+	},
+
+	up : function() {
+		var l = tb.firstChild;
+		for(var i = l; i != r; ) {
+			l = i;
+			i = i.nextSibling;
+			while (i != null && i.nodeName != "TR")	i = i.nextSibling;
+		}
+		change(l);
+	}
+};
+};
+
+function genLP(d) {
+	var t = hFRow("Label:", hInputT(null, 'l', ''));
+	return (t + hFRow("Addrress ID_H:", hInputT(null, 'idh', d?d.idh:'FE')) + hFRow("Address ID_L:", hInputT(null, 'idl', d?d.idl:'FE')));
+}
+
+function genCurtain(d) {
+	var t = genLP(d) + hInputH(null, 't', 'CU') + hInputH(null, 'c', 'curtain');
+	return hT(hT(t, 'table'), 'form');
+}
+
+function addCtl(t) {
+	var c = ric(ge("ports").insertRow());
+	var lbl = c();
+	lbl.classList.add("rotate");
+	var body = c();
+	var seq = c();
+	var del = c();
+	sh(lbl, hT(hB(t.length > 3 ? t.substring(0, 1).toUpperCase() + t.substring(1) : t.toUpperCase()), "div"));
+	var t = hTr(hTd(hInputB(null, null, "/\\", 'onclick="row(this).up();"')) + hTd(" ")
+		+ hT(hInputB(null, null, "X", 'onclick="row(this).remove();" tabindex="-1"'), "td", 'rowspan="2"'));
+	t += hTr(hTd(hInputB(null, null, "\\/", 'onclick="row(this).down();"')));
+	sh(seq, hT(t, 'table', 'class="btn"'));
+	return body;
+}
+
+function getGenF(t) {
+	if(!t) return null;
+	return {
+		curtain : genCurtain
+	}[t];
+}
+
+function addControl() {
+	var tc = ge("nc");
+	if(!tc) return;
+	var t = gv(tc), f = getGenF(t);
+	if(!f) return;
+	sh(addCtl(t), f());
+}
+
+function render(cfg) {
+	cfg = cfg ? cfg : {gpio:[]};
+	sh(ge("ports"), "");
+	for(var i = 0; i < cfg.gpio.length; ++i) {
+		var d = cfg.gpio[i];
+		if(!d || !d.c) continue;
+		var f = getGenF(d.c);
+		if(!f) continue;
+		var c = addCtl(d.c);
+		sh(c, f(d));
+		var fc = gt(c, "form")[0];
+		sv(fc.elements["l"], duri(d.l));
+		var ff = fc.elements["f"]
+		if(ff) sv(ff, d.f?duri(d.f):'');
+	}
+}
+
+function onBodyLoad() {
+	var r = ge("stat");
+	http("/ports.json", null, function(re, s) {
+		var cfg = null;
+		if(s == 200) {
+			cfg = eval('(' + re + ')');
+			sh(r, "");
+		} else {
+			sh(r, re);
+		}
+		render(cfg);
+	});
+}
+
+function submit() {
+	var r = ge("stat"), js = [], lu = [];
+	var fs = gt(ge("ports"), "form");
+	js.push('{"gpio":[\n');
+	var n = false;
+	for(var i = 0; i < fs.length; ++i) {
+		var f = fs[i];
+		if(!f) continue;
+		if(n) js.push(',\n');
+		js.push(getFormJson(f));
+		n = true;
+	}
+	js.push("\n]}");
+	upload("ports.json", js.join(""), function(r) {
+		if(r) {
+			var c = eval('(' + js.join("") + ')');
+			if(c && c.gpio) render(c);
+		}
+	});
+}
+
+</script>
+</head>
+
+<body>
+<h4><div id="stat">Loading...</div></h4>
+<table><tr>
+	<td>New Control:</td>
+	<td><select id="nc">
+		<option value="curtain">Curtain Motor</option>
+	</select></td>
+	<td><input type="button" value="Add" onclick="addControl();"/></td>
+</tr></table>
+<table id="ports"/>
+<table><tr>
+	<td><input type="button" value="Submit" onclick="submit();"/></td>
+</tr></table>
+<script language="javascript">
+window.onload = function() {
+	var j = document.createElement("script");
+	j.src = "ju.js";
+	j.onload = onBodyLoad;
+	document.body.appendChild(j);
+};
+</script>
+</body>
